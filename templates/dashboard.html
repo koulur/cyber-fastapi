@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+</head>
+<body>
+    <h1>Messages</h1>
+    {% for message in messages %}
+        <p>{{ message.text }} - Posted by {{ message.author }}</p>
+    {% endfor %}
+
+    <h2>Post a Message</h2>
+    <form action="/post" method="post">
+        <input type="text" name="message" placeholder="Your message"/>
+        {% for user in users %}
+            <input type="checkbox" name="visible_to" value="{{ user }}">{{ user }}
+        {% endfor %}
+        <input type="submit" value="Post"/>
+    </form>
+
+    <button id="logoutButton">Logout</button>
+
+<script>
+document.getElementById('logoutButton').addEventListener('click', function() {
+    fetch('/logout')
+        .then(response => response.json())
+        .then(data => {
+            if (data.message === 'Logged out') {
+                window.location.href = '/';
+            }
+        });
+});
+</script>
+</body>
+</html>
