@@ -10,15 +10,15 @@ SessionLocal = sessionmaker(bind=engine)
 
 
 # SOLUTION 3
-from cryptography.fernet import Fernet
+# from cryptography.fernet import Fernet
 
-key = Fernet.generate_key()  # store in a secure location
+# key = Fernet.generate_key()  # store in a secure location
 
-def encrypt(message: bytes, key: bytes) -> bytes:
-    return Fernet(key).encrypt(message)
+# def encrypt(message: bytes, key: bytes) -> bytes:
+#     return Fernet(key).encrypt(message)
     
-def decrypt(token: bytes, key: bytes) -> bytes:
-    return Fernet(key).decrypt(token)
+# def decrypt(token: bytes, key: bytes) -> bytes:
+#     return Fernet(key).decrypt(token)
 
 
 # FLAW 
