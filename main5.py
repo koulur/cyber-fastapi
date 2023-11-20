@@ -19,7 +19,6 @@ from typing import List
 import secrets
 
 
-
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
