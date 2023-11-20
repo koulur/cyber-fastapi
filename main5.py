@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 from models import Base, User, engine, Message
 from fastapi import status
 
-
+import json
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import create_engine
 from sqlalchemy import text
@@ -16,16 +16,15 @@ from sqlalchemy import text
 from pydantic import BaseModel
 from typing import List
 
+import secrets
 
-
-from init_database import encrypt, decrypt
 
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
 # SOLUTION 2
-# session_store = {}
+session_store = {}
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -44,6 +43,9 @@ def get_db():
 
 # SOLUTION 2
 def authenticate_user(username: str, password: str):
+    # Dummy implementation for demonstration
+    # In a real application, you should verify the username and password
+    # with your database and return user details if authentication is successful
     user = db.query(User).filter(User.username == username).first()
     if user and user.verify_password(password):
         return user
@@ -58,57 +60,49 @@ async def read_root(request: Request, username: str = Cookie(None)):
 
 @app.get("/logout")
 def logout(response: Response):
+    response.delete_cookie(key="session_token")
     response.delete_cookie(key="username")
     return {"message": "Logged out"}
 
-# FLAW 2
-# @app.post("/login")
-# async def login(response: Response, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
 
-   
-#     user = db.query(User).filter(User.username == username).first()
- 
-#     # SOLUTION 3
-#     # REMEMBER TO USE THE SAME KEY AS GENERATED IN init_database.py
-#     # password = encrypt(password.encode(), key)
-#     if user and user.hashed_password == password:
-#         print(f"cookie being set: {username}")
-#         response.set_cookie(key="username", value=username, httponly=True, max_age=1800)
-#         # return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
-#         return {"message": "Go manually dumbo"}
 
-#     return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
-
+# FLAW 4
+# Internals of session storage being leaked.
 @app.post("/login")
 async def login(response: Response, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
-    # SOLUTION 2
+
     # If you're also looking at FLAW 3, remember to encrypt/decrypt password
-    # user = authenticate_user(username, password)
-   
-    # FLAW 2
     user = db.query(User).filter(User.username == username).first()
-    if not user:
-        return {"error": "try again"}
-    # SOLUTION 3
-    # REMEMBER TO USE THE SAME KEY AS GENERATED IN init_database.py
-    # password = encrypt(password.encode(), key)
-    if user and user.hashed_password == password:
-        print(f"cookie being set: {username}")
-        response.set_cookie(key="username", value=username, httponly=True, max_age=1800)
-        # return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
-        return {"message": "Go manually dumbo"}
+    if not (user and user.hashed_password == password):
+        print(session_store)
+        return {"Could not find the user/password you were looking for. Perhaps you meant to type:": json.dumps(session_store)}
 
-    return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+  
+    session_token = secrets.token_urlsafe()
+    response = RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+    response.set_cookie(key="session_token", value=session_token, httponly=True, secure=True)
+    
+    # SOLUTION 2
+    # Store the session token with user info in the session store
+    session_store[session_token] = user.username  # Storing username for simplicity
 
+    return response
+   
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request, username: str = Cookie(None), db: Session = Depends(get_db)):
+    # if not username:
+    #     return RedirectResponse(url="/")
     
-    if not username:
-        return RedirectResponse(url="/")
+    session_token = request.cookies.get("session_token")
+    if not session_token or session_token not in session_store:
+        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+    username = session_store[session_token]
     user = db.query(User).filter(User.username == username).first()
     if not user:
         return RedirectResponse(url="/")
 
+    
+    # print(f'Username in dash: {username}')
     user_messages = db.query(Message).filter(
     (Message.author == user) |
 
@@ -121,7 +115,11 @@ async def dashboard(request: Request, username: str = Cookie(None), db: Session 
         else:
             print(f"Message: {message.text} has no author with a username")
     user_list = db.query(User).filter(User.username != username).all()
- 
+    # print([userr.username for userr in user_list])
+
+    # print(user_list)
+    # SOLUTION 2
+   
     # FLAW 2
     return templates.TemplateResponse("dashboard.html", {"request": request, "messages": user_messages, "users": user_list})
 
@@ -129,8 +127,14 @@ async def dashboard(request: Request, username: str = Cookie(None), db: Session 
 #FLAW 1
 @app.post("/post")
 async def post_message(request: Request, message: str = Form(...), visible_to: List[str] = Form(...), username: str = Cookie(None)):
-
+    session_token = request.cookies.get("session_token")
+    if not session_token or session_token not in session_store:
+        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+    username = session_store[session_token]
+    print("posting")
     if not username:
+        print("rediredctitntoioitj")
+        print(username)
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
     with engine.connect() as con:
@@ -140,6 +144,7 @@ async def post_message(request: Request, message: str = Form(...), visible_to: L
         result = con.execute(text("SELECT * FROM users WHERE username = :username"), {'username': username})
         author = result.first()
         if not author:
+            print("No author")
             conn.rollback()  # Rollback if user not found
             return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -158,8 +163,8 @@ async def post_message(request: Request, message: str = Form(...), visible_to: L
                     {'text': message, 'author_id': author_id, 'visible_to': visible_to_str})
 
         conn.commit()  
-     
-
+    print("going with session cookie")
+    return {"you": "have to go manually.."}
     return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
 
 # SOLUTTION 1

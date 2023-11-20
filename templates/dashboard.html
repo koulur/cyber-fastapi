@@ -11,6 +11,7 @@
 
     <h2>Post a Message</h2>
     <form action="/post" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="text" name="message" placeholder="Your message"/>
         {% for user in users %}
             <input type="checkbox" name="visible_to" value="{{ user.username }}">{{ user.username }}

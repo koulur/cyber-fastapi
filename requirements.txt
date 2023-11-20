@@ -1,0 +1,5 @@
+cryptography==2.6
+fastapi==0.104.1
+pydantic==1.10.4
+pydantic==1.10.13
+SQLAlchemy==2.0.23
