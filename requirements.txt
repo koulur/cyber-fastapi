@@ -1,9 +1,4 @@
 cryptography==2.6
-# fastapi==0.104.1
-# #pydantic==1.10.4
-# pydantic==1.10.13
-# SQLAlchemy==2.0.23
-
 anyio==3.7.1
 click==8.1.7
 exceptiongroup==1.1.3
