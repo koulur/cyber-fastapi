@@ -17,15 +17,13 @@ from pydantic import BaseModel
 from typing import List
 
 
-
-from init_database import encrypt, decrypt
+# SOLUTION 4
+#from init_database import encrypt, decrypt
 
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-# SOLUTION 2
-# session_store = {}
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -36,22 +34,9 @@ def get_db():
     finally:
         db.close()
 
-# def get_current_user(username: str = Cookie(None)):
-#     if username in users:
-#         return username
-#     return None
-
-
-# SOLUTION 2
-def authenticate_user(username: str, password: str):
-    user = db.query(User).filter(User.username == username).first()
-    if user and user.verify_password(password):
-        return user
-    return None
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, username: str = Cookie(None)):
-    print(username)
     if username:
         return RedirectResponse(url="/dashboard")
     return templates.TemplateResponse("index.html", {"request": request})
@@ -61,31 +46,10 @@ def logout(response: Response):
     response.delete_cookie(key="username")
     return {"message": "Logged out"}
 
-# FLAW 2
-# @app.post("/login")
-# async def login(response: Response, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
-
-   
-#     user = db.query(User).filter(User.username == username).first()
- 
-#     # SOLUTION 3
-#     # REMEMBER TO USE THE SAME KEY AS GENERATED IN init_database.py
-#     # password = encrypt(password.encode(), key)
-#     if user and user.hashed_password == password:
-#         print(f"cookie being set: {username}")
-#         response.set_cookie(key="username", value=username, httponly=True, max_age=1800)
-#         # return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
-#         return {"message": "Go manually dumbo"}
-
-#     return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.post("/login")
 async def login(response: Response, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
-    # SOLUTION 2
-    # If you're also looking at FLAW 3, remember to encrypt/decrypt password
-    # user = authenticate_user(username, password)
-   
-    # FLAW 2
+    
     user = db.query(User).filter(User.username == username).first()
     if not user:
         return {"error": "try again"}
@@ -93,11 +57,11 @@ async def login(response: Response, username: str = Form(...), password: str = F
     # REMEMBER TO USE THE SAME KEY AS GENERATED IN init_database.py
     # password = encrypt(password.encode(), key)
     if user and user.hashed_password == password:
-        print(f"cookie being set: {username}")
-        response.set_cookie(key="username", value=username, httponly=True, max_age=1800)
-        # return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
-        return {"message": "Go manually dumbo"}
-
+        response = RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+        response.set_cookie(key="username", value=username, httponly=True)
+        
+        return response
+        
     return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.get("/dashboard", response_class=HTMLResponse)
@@ -114,15 +78,9 @@ async def dashboard(request: Request, username: str = Cookie(None), db: Session 
 
     (Message.visible_to.contains(username))
     ).all()
-    for message in user_messages:
-        # Check if the author object and username are populated
-        if message.author and message.author.username:
-            print(f"Message: {message.text} - Author: {message.author.username}")
-        else:
-            print(f"Message: {message.text} has no author with a username")
+    
     user_list = db.query(User).filter(User.username != username).all()
  
-    # FLAW 2
     return templates.TemplateResponse("dashboard.html", {"request": request, "messages": user_messages, "users": user_list})
 
 
@@ -172,13 +130,11 @@ async def post_message(request: Request, message: str = Form(...), visible_to: L
 #     author = db.query(User).filter(User.username == username).first()
 #     if not author:
 #         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
-#     print(f'visiii: {visible_to}')
 #     # Verify each username in the visible_to list
 #     visible_usernames = []
 #     for uname in visible_to:
 #         user = db.query(User).filter(User.username == uname).first()
 #         if user:
-#             print(f'User: {user}, username: {user.username}')
 #             visible_usernames.append(user.username)
 
 #     # Convert the list of verified usernames to a comma-separated string
@@ -187,7 +143,6 @@ async def post_message(request: Request, message: str = Form(...), visible_to: L
 #     db.add(new_message)
 #     db.commit()
 #     return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
-
 
 
 Base.metadata.create_all(bind=engine)
